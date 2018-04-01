@@ -23,6 +23,10 @@
 #include <fcntl.h>
 #include <pthread.h>
 
+#ifdef PHYSFS_PLATFORM_SWITCH
+#include <switch.h>
+#endif
+
 #include "physfs_internal.h"
 
 
@@ -58,6 +62,8 @@ static inline PHYSFS_ErrorCode errcodeFromErrno(void)
 } /* errcodeFromErrno */
 
 
+/* unsupported */
+#ifndef PHYSFS_PLATFORM_SWITCH
 static char *getUserDirByUID(void)
 {
     uid_t uid = getuid();
@@ -83,11 +89,16 @@ static char *getUserDirByUID(void)
     
     return retval;
 } /* getUserDirByUID */
+#endif
 
 
 char *__PHYSFS_platformCalcUserDir(void)
 {
     char *retval = NULL;
+#ifdef PHYSFS_PLATFORM_SWITCH
+    /* Use the jail directory (hopefully) found before. */
+    retval = __PHYSFS_strdup(PHYSFS_getBaseDir());
+#else
     char *envr = getenv("HOME");
 
     /* if the environment variable was set, make sure it's really a dir. */
@@ -113,6 +124,7 @@ char *__PHYSFS_platformCalcUserDir(void)
 
     if (retval == NULL)
         retval = getUserDirByUID();
+#endif
 
     return retval;
 } /* __PHYSFS_platformCalcUserDir */
@@ -299,7 +311,13 @@ int __PHYSFS_platformDelete(const char *path)
 int __PHYSFS_platformStat(const char *fname, PHYSFS_Stat *st, const int follow)
 {
     struct stat statbuf;
+#ifdef PHYSFS_PLATFORM_SWITCH
+    /* ignoring symlinks, they are unsupported anyway! */
+    (void) follow;
+    const int rc = stat(fname, &statbuf);
+#else
     const int rc = follow ? stat(fname, &statbuf) : lstat(fname, &statbuf);
+#endif
     BAIL_IF(rc == -1, errcodeFromErrno(), 0);
 
     if (S_ISREG(statbuf.st_mode))
@@ -345,12 +363,23 @@ typedef struct
 
 void *__PHYSFS_platformGetThreadID(void)
 {
+#ifdef PHYSFS_PLATFORM_SWITCH
+    /* FIXME: No way to get current thread, just the main thread with
+     * envGetMainThreadHandle(). */
+    return ( (void *) 0xDEADC0DE );
+#else
     return ( (void *) ((size_t) pthread_self()) );
+#endif
 } /* __PHYSFS_platformGetThreadID */
 
 
 void *__PHYSFS_platformCreateMutex(void)
 {
+#ifdef PHYSFS_PLATFORM_SWITCH
+    RMutex *m = (RMutex *) allocator.Malloc(sizeof(RMutex));
+    BAIL_IF(!m, PHYSFS_ERR_OUT_OF_MEMORY, NULL);
+    rmutexInit(m);
+#else
     int rc;
     PthreadMutex *m = (PthreadMutex *) allocator.Malloc(sizeof (PthreadMutex));
     BAIL_IF(!m, PHYSFS_ERR_OUT_OF_MEMORY, NULL);
@@ -363,12 +392,15 @@ void *__PHYSFS_platformCreateMutex(void)
 
     m->count = 0;
     m->owner = (pthread_t) 0xDEADBEEF;
+#endif
     return ((void *) m);
 } /* __PHYSFS_platformCreateMutex */
 
 
 void __PHYSFS_platformDestroyMutex(void *mutex)
 {
+/* We do not care (yet?) */
+#ifndef PHYSFS_PLATFORM_SWITCH
     PthreadMutex *m = (PthreadMutex *) mutex;
 
     /* Destroying a locked mutex is a bug, but we'll try to be helpful. */
@@ -377,11 +409,16 @@ void __PHYSFS_platformDestroyMutex(void *mutex)
 
     pthread_mutex_destroy(&m->mutex);
     allocator.Free(m);
+#endif
 } /* __PHYSFS_platformDestroyMutex */
 
 
 int __PHYSFS_platformGrabMutex(void *mutex)
 {
+#ifdef PHYSFS_PLATFORM_SWITCH
+    RMutex *m = (RMutex *) mutex;
+    rmutexLock(m);
+#else
     PthreadMutex *m = (PthreadMutex *) mutex;
     pthread_t tid = pthread_self();
     if (m->owner != tid)
@@ -392,12 +429,17 @@ int __PHYSFS_platformGrabMutex(void *mutex)
     } /* if */
 
     m->count++;
+#endif
     return 1;
 } /* __PHYSFS_platformGrabMutex */
 
 
 void __PHYSFS_platformReleaseMutex(void *mutex)
 {
+#ifdef PHYSFS_PLATFORM_SWITCH
+    RMutex *m = (RMutex *) mutex;
+    rmutexUnlock(m);
+#else
     PthreadMutex *m = (PthreadMutex *) mutex;
     assert(m->owner == pthread_self());  /* catch programming errors. */
     assert(m->count > 0);  /* catch programming errors. */
@@ -409,6 +451,7 @@ void __PHYSFS_platformReleaseMutex(void *mutex)
             pthread_mutex_unlock(&m->mutex);
         } /* if */
     } /* if */
+#endif
 } /* __PHYSFS_platformReleaseMutex */
 
 #endif  /* PHYSFS_PLATFORM_POSIX */

@@ -214,6 +214,8 @@ static char *findBinaryInPath(const char *bin, char *envr)
 } /* findBinaryInPath */
 
 
+/* ignore symlinks, are not supported anyway */
+#ifndef PHYSFS_PLATFORM_SWITCH
 static char *readSymLink(const char *path)
 {
     ssize_t len = 64;
@@ -244,14 +246,45 @@ static char *readSymLink(const char *path)
         allocator.Free(retval);
     return NULL;
 } /* readSymLink */
-
+#endif
 
 char *__PHYSFS_platformCalcBaseDir(const char *argv0)
 {
     char *retval = NULL;
-    const char *envr = NULL;
 
     /* Try to avoid using argv0 unless forced to. Try system-specific stuff. */
+
+#ifdef PHYSFS_PLATFORM_SWITCH
+    /* As there is no system-specific directory, directly inspect argv0. */
+    if (argv0 == NULL)
+    {
+        /* User did not provide a path, just use the current working directory.
+         *  As physfs should be initialized soon after application start, this
+         *  should give us a useable directory.
+         */
+        char fullpath[PATH_MAX];
+        if (getcwd(fullpath, sizeof(fullpath)) != NULL)
+        {
+            const size_t cwdlen = strlen(fullpath);
+            /* getcwd does not provide a trailing slash, add it. */
+            retval = (char*) allocator.Malloc(cwdlen + 2);
+            BAIL_IF(!retval, PHYSFS_ERR_OUT_OF_MEMORY, NULL);
+            retval[cwdlen] = '/';
+            retval[cwdlen + 1] = '\0';
+        }
+    }
+    else
+        /* nx-hbmenu should give us the full path of the application, this may
+         *  reside in a subfolder. Higher level code will strip away the name
+         *  and extension.
+         */
+        return NULL;
+
+    if (!retval)
+        /* Last resort: use `/switch` directory. */
+        retval = __PHYSFS_strdup("sdmc:/switch/");
+#else
+    const char *envr = NULL;
 
     #if defined(PHYSFS_PLATFORM_FREEBSD)
     {
@@ -327,6 +360,7 @@ char *__PHYSFS_platformCalcBaseDir(const char *argv0)
         if (ptr != NULL)
             retval = ptr;  /* oh well if it failed. */
     } /* if */
+#endif
 
     return retval;
 } /* __PHYSFS_platformCalcBaseDir */
@@ -334,6 +368,20 @@ char *__PHYSFS_platformCalcBaseDir(const char *argv0)
 
 char *__PHYSFS_platformCalcPrefDir(const char *org, const char *app)
 {
+    char *retval = NULL;
+    size_t len = 0;
+#ifdef PHYSFS_PLATFORM_SWITCH
+    /* Use the jail directory (hopefully) found before. This way we do not
+     *  need to add an application folder, because it is exclusive.
+     */
+    const char *envr = __PHYSFS_getUserDir();
+    BAIL_IF_ERRPASS(!envr, NULL);
+    const char *append = ".config/";
+    len = strlen(envr) + strlen(append) + 1;
+    retval = (char *) allocator.Malloc(len);
+    BAIL_IF(!retval, PHYSFS_ERR_OUT_OF_MEMORY, NULL);
+    snprintf(retval, len, "%s%s", envr, append);
+#else
     /*
      * We use XDG's base directory spec, even if you're not on Linux.
      *  This isn't strictly correct, but the results are relatively sane
@@ -343,8 +391,6 @@ char *__PHYSFS_platformCalcPrefDir(const char *org, const char *app)
      */
     const char *envr = getenv("XDG_DATA_HOME");
     const char *append = "/";
-    char *retval = NULL;
-    size_t len = 0;
 
     if (!envr)
     {
@@ -358,6 +404,7 @@ char *__PHYSFS_platformCalcPrefDir(const char *org, const char *app)
     retval = (char *) allocator.Malloc(len);
     BAIL_IF(!retval, PHYSFS_ERR_OUT_OF_MEMORY, NULL);
     snprintf(retval, len, "%s%s%s/", envr, append, app);
+#endif
     return retval;
 } /* __PHYSFS_platformCalcPrefDir */
 

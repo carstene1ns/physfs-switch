@@ -69,6 +69,11 @@
 #elif defined(__QNX__)
 #  define PHYSFS_PLATFORM_QNX 1
 #  define PHYSFS_PLATFORM_POSIX 1
+#elif defined(__SWITCH__)
+#  define PHYSFS_PLATFORM_SWITCH 1
+#  define PHYSFS_PLATFORM_UNIX 1
+#  define PHYSFS_PLATFORM_POSIX 1
+#  define PHYSFS_NO_CDROM_SUPPORT 1
 #elif defined(unix) || defined(__unix__)
 #  define PHYSFS_PLATFORM_UNIX 1
 #  define PHYSFS_PLATFORM_POSIX 1
