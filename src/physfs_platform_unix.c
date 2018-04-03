@@ -148,6 +148,7 @@ void __PHYSFS_platformDetectAvailableCDs(PHYSFS_StringCallback cb, void *data)
 } /* __PHYSFS_platformDetectAvailableCDs */
 
 
+#ifndef PHYSFS_PLATFORM_SWITCH
 /*
  * See where program (bin) resides in the $PATH specified by (envr).
  *  returns a copy of the first element in envr that contains it, or NULL
@@ -212,6 +213,7 @@ static char *findBinaryInPath(const char *bin, char *envr)
 
     return NULL;  /* doesn't exist in path. */
 } /* findBinaryInPath */
+#endif
 
 
 /* ignore symlinks, are not supported anyway */
