@@ -373,9 +373,9 @@ typedef struct
 void *__PHYSFS_platformGetThreadID(void)
 {
 #ifdef PHYSFS_PLATFORM_SWITCH
-    /* FIXME: No way to get current thread, just the main thread with
-     * envGetMainThreadHandle(). */
-    return ( (void *) 0xDEADC0DE );
+    u64 tid = 0;
+    svcGetThreadId(&tid, CUR_THREAD_HANDLE);
+    return ( (void *) tid );
 #else
     return ( (void *) ((size_t) pthread_self()) );
 #endif
