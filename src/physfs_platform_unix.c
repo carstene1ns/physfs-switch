@@ -271,6 +271,7 @@ char *__PHYSFS_platformCalcBaseDir(const char *argv0)
             /* getcwd does not provide a trailing slash, add it. */
             retval = (char*) allocator.Malloc(cwdlen + 2);
             BAIL_IF(!retval, PHYSFS_ERR_OUT_OF_MEMORY, NULL);
+            strncpy(retval, fullpath, cwdlen);
             retval[cwdlen] = '/';
             retval[cwdlen + 1] = '\0';
         }
